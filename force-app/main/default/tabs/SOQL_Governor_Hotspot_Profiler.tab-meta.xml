@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>SOQL &amp; Governor Hotspot Profiler</description>
+    <flexiPage>SOQL_Governor_Hotspot_Profiler</flexiPage>
+    <label>SOQL &amp; Governor Hotspot Profiler</label>
+    <motif>Custom83: Pencil</motif>
+</CustomTab>

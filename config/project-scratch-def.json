@@ -1,0 +1,13 @@
+{
+  "orgName": "SOQL & Governor Hotspot Profiler",
+  "edition": "Developer",
+  "features": [],
+  "settings": {
+    "lightningExperienceSettings": {
+      "enableS1DesktopEnabled": true
+    },
+    "securitySettings": {
+      "enableAdminLoginAsAnyUser": true
+    }
+  }
+}

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Org-wide performance forensics for Apex teams (SOQL shape + governor hotspots).</description>
+    <formFactors>Large</formFactors>
+    <label>SOQL &amp; Governor Hotspot Profiler</label>
+    <navType>Standard</navType>
+    <tabs>SOQL_Governor_Hotspot_Profiler</tabs>
+    <uiType>Lightning</uiType>
+</CustomApplication>

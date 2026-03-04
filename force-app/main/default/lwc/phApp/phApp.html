@@ -1,0 +1,369 @@
+<template>
+    <section class="shell">
+        <header class="hero">
+            <div>
+                <div class="title">SOQL &amp; Governor Hotspot Profiler</div>
+                <div class="subtitle">Org-wide performance forensics · query fingerprints · regressions · alerting</div>
+            </div>
+            <div class="heroActions">
+                <lightning-button variant="brand" label="Run Profiler" onclick={runProfiler} disabled={busy}></lightning-button>
+                <lightning-button class="slds-m-left_small" variant="neutral" label="Refresh Dashboard" onclick={refreshDashboard} disabled={busy}></lightning-button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="topRow">
+                <article class="card">
+                    <div class="cardHeader">
+                        <div class="cardTitle">Current Store</div>
+                        <div class="pills">
+                            <template if:true={summary}>
+                                <span class="pill">{summary.runs} runs</span>
+                                <span class="pill">{summary.txns} txns</span>
+                                <span class="pill">{summary.queries} queries</span>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="cardBody">
+                        <template if:true={summary}>
+                            <div class="kv">
+                                <div class="kvRow">
+                                    <div class="k">Last run</div>
+                                    <div class="v">{summary.lastRunStatus} · {summary.lastRunMode}</div>
+                                </div>
+                                <div class="kvRow">
+                                    <div class="k">Started</div>
+                                    <div class="v"><lightning-formatted-date-time value={summary.lastRunStartedAt}></lightning-formatted-date-time></div>
+                                </div>
+                                <div class="kvRow">
+                                    <div class="k">Message</div>
+                                    <div class="v muted">{summary.lastRunMessage}</div>
+                                </div>
+                            </div>
+                        </template>
+                        <div class="note">
+                            Tip: start with <b>Light mode</b> (last 24h). Use <b>Deep mode</b> to capture a specific flow by enabling trace flags.
+                        </div>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <div class="cardHeader">
+                        <div class="cardTitle">Profiler Run</div>
+                        <div class="pills">
+                            <span class="pill pillMuted">{mode}</span>
+                            <span class="pill pillMuted">{windowLabel}</span>
+                        </div>
+                    </div>
+                    <div class="cardBody">
+                        <div class="controls">
+                            <lightning-combobox label="Mode" value={mode} options={modeOptions} onchange={handleMode}></lightning-combobox>
+
+                            <lightning-combobox label="Window" value={windowDays} options={windowOptions} onchange={handleWindow}></lightning-combobox>
+
+                            <lightning-input type="number" label="Max logs" value={maxLogs} onchange={handleMaxLogs} min="10" max="500"></lightning-input>
+
+                            <lightning-input type="search" label="Deep mode user search" value={userSearch} onchange={handleUserSearch} onkeyup={handleUserKeyUp} placeholder="Name or username"></lightning-input>
+                        </div>
+
+                        <template if:true={userSuggestions.length}>
+                            <div class="suggestions">
+                                <template for:each={userSuggestions} for:item="u">
+                                    <button class="suggestion" key={u.id} data-id={u.id} data-name={u.name} onclick={pickUser}>
+                                        <span class="sName">{u.name}</span>
+                                        <span class="sUser">{u.username}</span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+
+                        <template if:true={pickedUser}>
+                            <div class="picked">
+                                <span class="pill">Deep user: {pickedUser.name}</span>
+                                <span class="pill pillMuted">{pickedUser.id}</span>
+                                <lightning-button-icon class="slds-m-left_small" icon-name="utility:close" alternative-text="Clear" onclick={clearPickedUser}></lightning-button-icon>
+                            </div>
+                        </template>
+
+                        <div class="runActions">
+                            <lightning-button variant="neutral" label="Enable Trace (30m)" onclick={enableTrace} disabled={traceDisabled}></lightning-button>
+                            <lightning-button class="slds-m-left_small" variant="brand" label="Run Now" onclick={runProfiler} disabled={busy}></lightning-button>
+                        </div>
+
+                        <template if:true={busy}>
+                            <div class="progress">
+                                <lightning-progress-bar value={progress} size="medium"></lightning-progress-bar>
+                                <div class="progressMeta">{progressLabel}</div>
+                            </div>
+                        </template>
+                    </div>
+                </article>
+            </div>
+
+            <div class="mainRow">
+                <article class="card cardFull">
+                    <div class="cardHeader">
+                        <div class="cardTitle">Dashboard</div>
+                        <div class="pills">
+                            <span class="pill pillMuted">Top over {dashboardDays} days</span>
+                        </div>
+                    </div>
+
+                    <div class="cardBody">
+                        <template if:true={dashboard}>
+                            <div class="dashGrid">
+                                <div>
+                                    <div class="sectionTitle">Top CPU Transactions</div>
+                                    <div class="tableWrap">
+                                        <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>Start</th>
+                                                    <th>User</th>
+                                                    <th>Signature</th>
+                                                    <th>CPU</th>
+                                                    <th>SOQL</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template for:each={dashboard.topTxns} for:item="t">
+                                                    <tr key={t.id} class="rowHover" data-id={t.id} onclick={selectTransaction}>
+                                                        <td><lightning-formatted-date-time value={t.startTime}></lightning-formatted-date-time></td>
+                                                        <td>{t.userName}</td>
+                                                        <td class="mono">{t.signature}</td>
+                                                        <td><span class="badge">{t.cpuMs} ms</span></td>
+                                                        <td>{t.soqlCount} · {t.soqlMs} ms</td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <template if:true={selectedTxnQueries.length}>
+                                        <div class="sectionTitle slds-m-top_medium">Selected Transaction — Slowest Queries</div>
+                                        <div class="tableWrap">
+                                            <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Hash</th>
+                                                        <th>Duration</th>
+                                                        <th>Rows</th>
+                                                        <th>SOQL</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <template for:each={selectedTxnQueries} for:item="q">
+                                                        <tr key={q.id}>
+                                                            <td class="mono">{q.fingerprintHash}</td>
+                                                            <td><span class="badge">{q.durationMs} ms</span></td>
+                                                            <td>{q.rows}</td>
+                                                            <td class="mono wrap">{q.soqlText}</td>
+                                                        </tr>
+                                                    </template>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div>
+                                    <div class="sectionTitle">Top Query Fingerprints</div>
+                                    <div class="tableWrap">
+                                        <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>Date</th>
+                                                    <th>Hash</th>
+                                                    <th>Avg</th>
+                                                    <th>P95</th>
+                                                    <th>Count</th>
+                                                    <th>Suspect</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template for:each={dashboard.topQueries} for:item="q">
+                                                    <tr key={q.id}>
+                                                        <td>{q.statDate}</td>
+                                                        <td class="mono">{q.fingerprintHash}</td>
+                                                        <td><span class="badge">{q.avgMs} ms</span></td>
+                                                        <td>{q.p95Ms} ms</td>
+                                                        <td>{q.countVal}</td>
+                                                        <td>{q.suspectScore}</td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="sectionTitle slds-m-top_medium">Regressions (7 vs 30 days)</div>
+                                    <template if:true={dashboard.regressions.length}>
+                                        <div class="regressions">
+                                            <template for:each={dashboard.regressions} for:item="r">
+                                                <div class="regCard" key={r.key}>
+                                                    <div class="regHead">
+                                                        <span class="pill">{r.kind}</span>
+                                                        <span class="mono">{r.key}</span>
+                                                    </div>
+                                                    <div class="regBody">
+                                                        <div class="regMetric">
+                                                            <div class="k">Recent avg</div>
+                                                            <div class="v">{r.recentAvg}</div>
+                                                        </div>
+                                                        <div class="regMetric">
+                                                            <div class="k">Baseline avg</div>
+                                                            <div class="v">{r.baselineAvg}</div>
+                                                        </div>
+                                                        <div class="regMetric">
+                                                            <div class="k">Ratio</div>
+                                                            <div class="v"><span class="badge">{r.ratio}×</span></div>
+                                                        </div>
+                                                        <div class="mono small wrap">{r.sample}</div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template if:false={dashboard.regressions.length}>
+                                        <div class="empty">Not enough history yet to compute regressions. Keep running Light mode daily.</div>
+                                    </template>
+
+                                    <div class="sectionTitle slds-m-top_medium">Recent Alerts</div>
+                                    <template if:true={dashboard.recentAlerts.length}>
+                                        <div class="alerts">
+                                            <template for:each={dashboard.recentAlerts} for:item="a">
+                                                <div class={a.className} key={a.id}>
+                                                    <div class="aHead">
+                                                        <span class="pill">{a.severity}</span>
+                                                        <span class="muted">{a.ruleName}</span>
+                                                    </div>
+                                                    <div class="aMsg">{a.message}</div>
+                                                    <div class="aMeta muted">
+                                                        <lightning-formatted-date-time value={a.firedAt}></lightning-formatted-date-time>
+                                                        · {a.reference}
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template if:false={dashboard.recentAlerts.length}>
+                                        <div class="empty">No alert events yet. Configure rules in the Alerts panel below.</div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template if:false={dashboard}>
+                            <div class="empty">Run the profiler to populate metrics, then refresh.</div>
+                        </template>
+                    </div>
+                </article>
+            </div>
+
+            <div class="bottomRow">
+                <article class="card">
+                    <div class="cardHeader"><div class="cardTitle">Alerts</div></div>
+                    <div class="cardBody">
+                        <div class="controls controls2">
+                            <lightning-input label="Rule name" value={ruleName} onchange={handleRuleName}></lightning-input>
+                            <lightning-combobox label="Type" value={ruleType} options={ruleTypeOptions} onchange={handleRuleType}></lightning-combobox>
+                            <lightning-combobox label="Metric" value={ruleMetric} options={ruleMetricOptions} onchange={handleRuleMetric}></lightning-combobox>
+                            <lightning-input type="number" label="Threshold" value={ruleThreshold} onchange={handleRuleThreshold}></lightning-input>
+                            <lightning-combobox label="Window (days)" value={ruleWindowDays} options={windowOptions} onchange={handleRuleWindow}></lightning-combobox>
+                            <lightning-input type="checkbox" label="Enabled" checked={ruleEnabled} onchange={handleRuleEnabled}></lightning-input>
+                        </div>
+                        <div class="runActions">
+                            <lightning-button variant="brand" label="Save Rule" onclick={saveRule} disabled={busy}></lightning-button>
+                            <lightning-button class="slds-m-left_small" variant="neutral" label="Evaluate Now" onclick={evaluateNow} disabled={busy}></lightning-button>
+                            <lightning-button class="slds-m-left_small" variant="neutral" label="Schedule Nightly" onclick={scheduleNightly} disabled={busy}></lightning-button>
+                        </div>
+
+                        <template if:true={alertRules.length}>
+                            <div class="sectionTitle slds-m-top_medium">Existing Rules</div>
+                            <div class="tableWrap">
+                                <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Metric</th>
+                                            <th>Threshold</th>
+                                            <th>Window</th>
+                                            <th>Enabled</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template for:each={alertRules} for:item="r">
+                                            <tr key={r.id}>
+                                                <td>{r.name}</td>
+                                                <td>{r.ruleType}</td>
+                                                <td>{r.metric}</td>
+                                                <td>{r.threshold}</td>
+                                                <td>{r.windowDays}</td>
+                                                <td>{r.enabled}</td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <div class="cardHeader"><div class="cardTitle">Explorer</div></div>
+                    <div class="cardBody">
+                        <div class="controls controls3">
+                            <lightning-input type="date" label="Start date" value={expStartDate} onchange={handleExpStart}></lightning-input>
+                            <lightning-input type="date" label="End date" value={expEndDate} onchange={handleExpEnd}></lightning-input>
+                            <lightning-input type="search" label="User filter" value={expUserSearch} onchange={handleExpUserSearch} onkeyup={handleExpUserKeyUp} placeholder="Name or username"></lightning-input>
+                            <lightning-button variant="neutral" label="Search" onclick={searchExplorer} disabled={busy}></lightning-button>
+                        </div>
+
+                        <template if:true={expUserSuggestions.length}>
+                            <div class="suggestions">
+                                <template for:each={expUserSuggestions} for:item="u">
+                                    <button class="suggestion" key={u.id} data-id={u.id} data-name={u.name} onclick={pickExpUser}>
+                                        <span class="sName">{u.name}</span>
+                                        <span class="sUser">{u.username}</span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+
+                        <template if:true={explorerRows.length}>
+                            <div class="tableWrap slds-m-top_small">
+                                <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Start</th>
+                                            <th>User</th>
+                                            <th>Signature</th>
+                                            <th>CPU</th>
+                                            <th>SOQL</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template for:each={explorerRows} for:item="t">
+                                            <tr key={t.id} class="rowHover" data-id={t.id} onclick={selectTransaction}>
+                                                <td><lightning-formatted-date-time value={t.startTime}></lightning-formatted-date-time></td>
+                                                <td>{t.userName}</td>
+                                                <td class="mono">{t.signature}</td>
+                                                <td><span class="badge">{t.cpuMs} ms</span></td>
+                                                <td>{t.soqlCount} · {t.soqlMs} ms</td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+
+                        <template if:false={explorerRows.length}>
+                            <div class="empty">Search recent transactions once you have data.</div>
+                        </template>
+                    </div>
+                </article>
+            </div>
+
+        </div>
+    </section>
+</template>
