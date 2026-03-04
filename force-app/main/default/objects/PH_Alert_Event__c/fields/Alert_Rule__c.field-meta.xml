@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Alert_Rule__c</fullName>
+    <label>Alert Rule</label>
+    <type>Lookup</type>
+    <referenceTo>PH_Alert_Rule__c</referenceTo>
+    <relationshipLabel>Alert Events</relationshipLabel>
+    <relationshipName>Alert_Events</relationshipName>
+    <required>true</required>
+</CustomField>

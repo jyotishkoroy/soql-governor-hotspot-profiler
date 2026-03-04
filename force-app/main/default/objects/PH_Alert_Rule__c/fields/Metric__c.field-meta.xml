@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Metric__c</fullName>
+    <label>Metric</label>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>AvgMs</fullName><default>false</default><label>AvgMs</label></value>
+            <value><fullName>P95Ms</fullName><default>false</default><label>P95Ms</label></value>
+            <value><fullName>AvgCpu</fullName><default>false</default><label>AvgCpu</label></value>
+            <value><fullName>P95Cpu</fullName><default>false</default><label>P95Cpu</label></value>
+            <value><fullName>Count</fullName><default>false</default><label>Count</label></value>
+        </valueSetDefinition>
+    </valueSet>
+    <required>true</required>
+</CustomField>
